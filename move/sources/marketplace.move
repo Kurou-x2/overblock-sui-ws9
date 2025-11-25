@@ -44,10 +44,22 @@ public struct HeroBought has copy, drop {
     timestamp: u64,
 }
 
+// YENİ EKLENEN EVENTLER
+public struct HeroDelisted has copy, drop {
+    list_hero_id: ID,
+    seller: address,
+    timestamp: u64,
+}
+
+public struct PriceChanged has copy, drop {
+    list_hero_id: ID,
+    new_price: u64,
+    timestamp: u64,
+}
+
 // ========= FUNCTIONS =========
 
 fun init(ctx: &mut TxContext) {
-    // Admin yetkisi oluşturulup yayınlayana veriliyor
     let admin_cap = AdminCap {
         id: object::new(ctx)
     };
@@ -59,7 +71,6 @@ public fun list_hero(nft: Hero, price: u64, ctx: &mut TxContext) {
     let id = object::new(ctx);
     let list_hero_id = object::uid_to_inner(&id);
 
-    // Satış objesi oluşturuluyor
     let list_hero = ListHero {
         id,
         nft,
@@ -67,7 +78,6 @@ public fun list_hero(nft: Hero, price: u64, ctx: &mut TxContext) {
         seller: ctx.sender(),
     };
 
-    // Event yayınlanıyor
     event::emit(HeroListed {
         list_hero_id,
         price,
@@ -75,26 +85,19 @@ public fun list_hero(nft: Hero, price: u64, ctx: &mut TxContext) {
         timestamp: ctx.epoch_timestamp_ms(),
     });
 
-    // Obje paylaşıma açılıyor
     transfer::share_object(list_hero);
 }
 
 #[allow(lint(self_transfer))]
 public fun buy_hero(list_hero: ListHero, coin: Coin<SUI>, ctx: &mut TxContext) {
 
-    // Satış objesi parçalanıyor
     let ListHero { id, nft, price, seller } = list_hero;
 
-    // Ödeme kontrolü
     assert!(coin::value(&coin) == price, EInvalidPayment);
 
-    // Coin satıcıya gidiyor
     transfer::public_transfer(coin, seller);
-
-    // NFT alıcıya (işlemi yapana) gidiyor
     transfer::public_transfer(nft, ctx.sender());
 
-    // Event yayınlanıyor
     event::emit(HeroBought {
         list_hero_id: object::uid_to_inner(&id),
         price,
@@ -103,24 +106,38 @@ public fun buy_hero(list_hero: ListHero, coin: Coin<SUI>, ctx: &mut TxContext) {
         timestamp: ctx.epoch_timestamp_ms(),
     });
 
-    // Satış objesi siliniyor
     object::delete(id);
 }
 
-// ========= ADMIN FUNCTIONS =========
+// ========= ADMIN FUNCTIONS (GÜNCELLENDİ) =========
 
-public fun delist(_: &AdminCap, list_hero: ListHero) {
+// Parametrelere 'ctx' eklendi ve Event yayını yapıldı
+public fun delist(_: &AdminCap, list_hero: ListHero, ctx: &mut TxContext) {
 
-    // Admin ilanı kaldırıyor, NFT satıcıya geri dönüyor
     let ListHero { id, nft, price: _, seller } = list_hero;
+    
+    // Olay yayınlanıyor
+    event::emit(HeroDelisted {
+        list_hero_id: object::uid_to_inner(&id),
+        seller,
+        timestamp: ctx.epoch_timestamp_ms(),
+    });
 
     transfer::public_transfer(nft, seller);
     object::delete(id);
 }
 
-public fun change_the_price(_: &AdminCap, list_hero: &mut ListHero, new_price: u64) {
-    // Fiyat güncelleniyor
+// Parametrelere 'ctx' eklendi ve Event yayını yapıldı
+public fun change_the_price(_: &AdminCap, list_hero: &mut ListHero, new_price: u64, ctx: &mut TxContext) {
+    
     list_hero.price = new_price;
+
+    // Olay yayınlanıyor
+    event::emit(PriceChanged {
+        list_hero_id: object::uid_to_inner(&list_hero.id),
+        new_price,
+        timestamp: ctx.epoch_timestamp_ms(),
+    });
 }
 
 // ========= GETTER FUNCTIONS =========
